@@ -138,7 +138,7 @@ Se você quiser gerar o relatório HTML localmente, siga estes passos usando o *
 |   ├── LoginPage.ts
 |   test
 |   ├── features
-|   |   ├── TelaDeLogin.feature
+|   |   ├── telaDeLogin.feature
 |   ├── steps
 |   |   └── telaDeLogin.ts
 |   .gitignore
