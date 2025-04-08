@@ -1,0 +1,1 @@
+export let timeout: number = 20000;

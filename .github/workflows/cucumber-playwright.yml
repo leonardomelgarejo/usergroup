@@ -1,0 +1,129 @@
+name: UserGroup Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Tags para rodar os testes'
+        required: false
+        default: ''
+  schedule:
+    - cron: "0 11 * * 1-5"
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  test:
+    timeout-minutes: 60  
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js and Playwright
+        run: |
+          npx playwright install --with-deps
+          npm ci
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright Browsers (Chromium)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-chromium-
+      
+      - name: Install Google Chrome for Playwright
+        run: npx playwright install chromium --with-deps
+
+      - name: Ensure test-results directory exists
+        run: mkdir -p test-results
+
+      - name: Ensure .env file is available
+        run: |
+          mkdir -p helper/env
+          cat <<EOF > helper/env/.env.test
+          USER_NAME=${{ secrets.USER_NAME }}
+          PASSWORD=${{ secrets.PASSWORD }}
+          BASEURL=${{ secrets.BASEURL }}
+          ENV=test
+          EOF
+
+      - name: Run Cucumber tests
+        env:
+          BASEURL: ${{ secrets.BASEURL }}
+          ENV: test
+          npm_config_TAGS: "${{ github.event.inputs.tags }}"
+        run: |
+          TAGS_OPTION=""
+          if [[ -n "${{ github.event.inputs.tags }}" ]]; then
+            TAGS_OPTION="--TAGS=${{ github.event.inputs.tags }}"
+          fi
+          
+          npm test $TAGS_OPTION --exit | tee output.log
+          
+          if grep -q "failed" output.log; then
+            echo "Testes falharam!"
+            exit 1
+          fi
+
+      - name: Upload Cucumber Test Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cucumber-test-report
+          path: test-results
+          retention-days: 5
+
+  deploy-report:
+    needs: test
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download Test Report
+        uses: actions/download-artifact@v4
+        with:
+          name: cucumber-test-report
+          path: test-results
+
+      - name: Rename Cucumber Report to index.html (if exists)
+        run: |
+          if [ -f test-results/cucumber-report.html ]; then
+            cp test-results/cucumber-report.html test-results/index.html
+          else
+            echo "Arquivo cucumber-report.html não encontrado. Pulando renomeação."
+          fi
+
+      - name: Ensure JSON is accessible
+        run: |
+          if [ -f test-results/cucumber-report.json ]; then
+            cp test-results/cucumber-report.json test-results/report.json
+          else
+            echo "Arquivo cucumber-report.json não encontrado."
+          fi
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: test-results
+          publish_branch: gh-pages
+          force_orphan: true
+          keep_files: true

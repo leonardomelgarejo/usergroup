@@ -1,0 +1,13 @@
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+cucumber-report.html
+assets
+report/features
+@rerun.txt
+index.html
+.vscode
+helper/env/.env.dev
+helper/env/.env.test
