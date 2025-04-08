@@ -1,3 +1,5 @@
+[![UserGroup Pipeline](https://github.com/leonardomelgarejo/usergroup/actions/workflows/cucumber-playwright.yml/badge.svg)](https://github.com/leonardomelgarejo/usergroup/actions/workflows/cucumber-playwright.yml)
+
 # Exemplo de projeto MVP para automação de testes WEB para o grupo de usuários Outsystems
 
 ## Descrição
