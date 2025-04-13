@@ -85,39 +85,41 @@ jobs:
             exit 1
           fi
 
-      - name: Criar bug no ClickUp se os testes falharem
+      - name: Criar um bug no ClickUp para cada cenário com falha
         if: failure()
         run: |
-          echo "Extraindo cenários com falha do cucumber-report.json..."
+          echo "🔍 Buscando cenários com falha no relatório JSON..."
         
-          # Extrai os nomes dos cenários com status "failed"
+          # Captura os nomes dos cenários com falha
           FAILED_SCENARIOS=$(jq -r '.[]?.elements[]? | select(.steps[].result.status=="failed") | .name' test-results/cucumber-report.json | uniq)
         
           if [ -z "$FAILED_SCENARIOS" ]; then
-            echo "Nenhum cenário com falha identificado no JSON."
+            echo "✅ Nenhum cenário com falha encontrado."
             exit 0
           fi
         
-          BUG_NAME="🐞 Cenários com falha: $(echo "$FAILED_SCENARIOS" | paste -sd ' | ' -)"
+          for SCENARIO in $FAILED_SCENARIOS; do
+            echo "🐞 Criando bug para o cenário: $SCENARIO"
         
-          DESCRIPTION="Falha nos testes automatizados:\n\nCenários:\n$FAILED_SCENARIOS\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            # Monta a descrição com o link pro workflow
+            DESCRIPTION="Falha no cenário automatizado: \"$SCENARIO\"\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         
-          echo "Criando bug no ClickUp com nome: $BUG_NAME"
-        
-          curl -X POST "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
-            -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n \
-              --arg name "$BUG_NAME" \
-              --arg description "$DESCRIPTION" \
-              '{
-                name: $name,
-                description: $description,
-                status: "to do",
-                priority: 3,
-                tags: ["automated", "ci", "bug"],
-                due_date_time: false
-              }')"        
+            # Faz a chamada para a API do ClickUp
+            curl -s -X POST "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
+              -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg name "🐞 Bug automático: $SCENARIO" \
+                --arg description "$DESCRIPTION" \
+                '{
+                  name: $name,
+                  description: $description,
+                  status: "to do",
+                  priority: 3,
+                  tags: ["automated", "ci", "bug"],
+                  due_date_time: false
+                }')"
+          done           
 
   deploy-report:
     needs: test
