@@ -85,12 +85,13 @@ jobs:
             exit 1
           fi
 
-      - name: Criar um bug no ClickUp para cada cenário com falha
+      - name: Criar um bug no ClickUp para cada cenário com falha (sem duplicar)
         if: failure()
         run: |
           echo "🔍 Buscando cenários com falha no relatório JSON..."
         
-          readarray -t FAILED_SCENARIOS < <(jq -r '.[]?.elements[]? | select(.steps[].result.status=="failed") | .name' test-results/cucumber-report.json | uniq)
+          # Lê os nomes dos cenários com falha, removendo duplicados
+          readarray -t FAILED_SCENARIOS < <(jq -r '.[]?.elements[]? | select(.steps[].result.status=="failed") | .name' test-results/cucumber-report.json | sort -u)
         
           if [ ${#FAILED_SCENARIOS[@]} -eq 0 ]; then
             echo "✅ Nenhum cenário com falha encontrado."
@@ -99,36 +100,40 @@ jobs:
         
           for SCENARIO in "${FAILED_SCENARIOS[@]}"; do
             echo "🔍 Verificando se o bug já existe para o cenário: $SCENARIO"
-
-            # Busca tarefas existentes com o mesmo nome
-            EXISTING_TASK=$(curl -s -X GET "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task?search=${SCENARIO}" \
-            -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
-            -H "Content-Type: application/json")
-
-            if echo "$EXISTING_TASK" | jq -e ".tasks[] | select(.name | test(\"$SCENARIO\"))" > /dev/null; then
-            echo "⚠️ Bug já existe para o cenário: $SCENARIO – pulando criação."
-            continue
+        
+            # Busca tarefas com o nome do cenário no ClickUp
+            EXISTING_TASKS=$(curl -s -G "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
+              --data-urlencode "search=$SCENARIO" \
+              -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
+              -H "Content-Type: application/json")
+        
+            # Se já houver tarefa com esse nome, pula
+            if echo "$EXISTING_TASKS" | jq -e --arg scenario "$SCENARIO" '.tasks[] | select(.name | test($scenario))' > /dev/null; then
+              echo "⚠️ Bug já existe para o cenário: $SCENARIO – pulando criação."
+              continue
             fi
-
+        
             echo "🐞 Criando bug para o cenário: $SCENARIO"
-
+        
+            # Monta descrição com quebra de linha e link do workflow
             DESCRIPTION=$(printf "Falha no cenário automatizado: \"%s\"\n\n🔗 Workflow: %s/%s/actions/runs/%s" \
-            "$SCENARIO" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}")
-
+              "$SCENARIO" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}")
+        
+            # Cria o bug no ClickUp
             curl -s -X POST "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
-            -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n \
-            --arg name "🐞 CI Fail: $SCENARIO" \
-            --arg description "$DESCRIPTION" \
-            '{
-            name: $name,
-            description: $description,
-            status: "to do",
-            priority: 3,
-            tags: ["automated", "ci", "bug"],
-            due_date_time: false
-            }')"
+              -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg name "🐞 Bug automático: $SCENARIO" \
+                --arg description "$DESCRIPTION" \
+                '{
+                  name: $name,
+                  description: $description,
+                  status: "to do",
+                  priority: 3,
+                  tags: ["automated", "ci", "bug"],
+                  due_date_time: false
+                }')"
           done
 
   deploy-report:
