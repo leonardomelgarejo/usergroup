@@ -89,16 +89,16 @@ jobs:
         if: failure()
         run: |
           echo "🔍 Buscando cenários com falha no relatório JSON..."
-      
-          # Captura os nomes dos cenários com falha
-          FAILED_SCENARIOS=$(jq -r '.[]?.elements[]? | select(.steps[].result.status=="failed") | .name' test-results/cucumber-report.json | uniq)
         
-          if [ -z "$FAILED_SCENARIOS" ]; then
+          # Lê os nomes dos cenários com falha e armazena cada linha como um item de array
+          readarray -t FAILED_SCENARIOS < <(jq -r '.[]?.elements[]? | select(.steps[].result.status=="failed") | .name' test-results/cucumber-report.json | uniq)
+        
+          if [ ${#FAILED_SCENARIOS[@]} -eq 0 ]; then
             echo "✅ Nenhum cenário com falha encontrado."
             exit 0
           fi
         
-          for SCENARIO in $FAILED_SCENARIOS; do
+          for SCENARIO in "${FAILED_SCENARIOS[@]}"; do
             echo "🐞 Criando bug para o cenário: $SCENARIO"
         
             # Monta a descrição com o link pro workflow
@@ -119,7 +119,7 @@ jobs:
                   tags: ["automated", "ci", "bug"],
                   due_date_time: false
                 }')"
-          done        
+          done     
 
   deploy-report:
     needs: test
