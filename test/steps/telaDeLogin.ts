@@ -36,11 +36,15 @@ When('clica no botão login', { timeout: timeout }, async function () {
 
 Then('a página inicial é acessada', { timeout: timeout }, async function () {
   const titleTest = await loginPage.getProductsText();
-  assert.assertElementContains(titleTest, "Productsx");
-  // assert.assertElementContains(titleTest, "Products");
+  assert.assertElementContains(titleTest, "Products");
 });
 
-Then('uma mensagem de erro é apresentada', { timeout: timeout }, async function () {
+Then('uma mensagem de erro é apresentada - usuário incorreto', { timeout: timeout }, async function () {
   const errorMessage = await loginPage.getErrorMessageText();
   assert.assertElementContains(errorMessage, "Username and password do not match any user in this service");
+});
+
+Then('uma mensagem de erro é apresentada - senha incorreta', { timeout: timeout }, async function () {
+  const errorMessage = await loginPage.getErrorMessageText();
+  assert.assertElementContains(errorMessage, "Username and password do not match any user in this servicex");
 });

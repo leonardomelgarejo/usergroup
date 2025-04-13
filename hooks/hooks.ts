@@ -15,11 +15,7 @@ BeforeAll(async function() {
   browser = await invokeBrowser();
 })
 
-Before({ tags: "@skip" }, async function () {
-  return "skipped";
-});
-
-Before({ tags: "@ui" },async function ({ pickle }) {
+Before(async function ({ pickle }) {
   const scenarioName = pickle.name + pickle.id;
   context = await browser.newContext({
     recordVideo: {
@@ -37,7 +33,7 @@ Before({ tags: "@ui" },async function ({ pickle }) {
   fixture.logger = createLogger(options(scenarioName));
 })
 
-After({ tags: "@ui" }, async function ({ pickle }) {
+After(async function ({ pickle }) {
   let videoPath: string;
   let img: Buffer;
   const path = `./test-results/report/trace/${pickle.id}.zip`;

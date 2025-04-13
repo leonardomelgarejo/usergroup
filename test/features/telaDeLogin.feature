@@ -14,7 +14,7 @@ Feature: Tela de Login
       When preenche o usuário incorreto
        And preenche a senha correta
        And clica no botão login
-      Then uma mensagem de erro é apresentada
+      Then uma mensagem de erro é apresentada - usuário incorreto
 
   @ui @login @sem-sucesso @senha-incorreta
   Scenario: 03-Login sem sucesso - Senha errada
@@ -22,4 +22,4 @@ Feature: Tela de Login
       When preenche o usuário correto
        And preenche a senha incorreta
        And clica no botão login
-      Then uma mensagem de erro é apresentada
+      Then uma mensagem de erro é apresentada - senha incorreta
