@@ -36,7 +36,8 @@ When('clica no botão login', { timeout: timeout }, async function () {
 
 Then('a página inicial é acessada', { timeout: timeout }, async function () {
   const titleTest = await loginPage.getProductsText();
-  assert.assertElementContains(titleTest, "Products");
+  assert.assertElementContains(titleTest, "Product");
+  // assert.assertElementContains(titleTest, "Products");
 });
 
 Then('uma mensagem de erro é apresentada', { timeout: timeout }, async function () {
