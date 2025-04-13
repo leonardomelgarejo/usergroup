@@ -85,34 +85,38 @@ jobs:
             exit 1
           fi
 
-      - name: Criar um bug no ClickUp para cada cenário com falha (com erro)
+      - name: Criar um bug no ClickUp para cada cenário com falha (com todos os erros)
         if: failure()
         run: |
-          echo "🔍 Extraindo cenários com falha e mensagens de erro..."
+          echo "🔍 Extraindo cenários com falha e agregando erros..."
         
-          # Extrai nome do cenário e erro (se houver), um por linha, separado por "|"
-          readarray -t FAILED_ENTRIES < <(jq -r '
-            .[]?.elements[]? 
-            | select(.steps[].result.status == "failed") 
-            | {
-                name: .name, 
-                error: (.steps[] | select(.result.status == "failed") | .result.error_message // "Erro não especificado")
-              } 
-            | "\(.name) | \(.error)"
-          ' test-results/cucumber-report.json)
-      
-          if [ ${#FAILED_ENTRIES[@]} -eq 0 ]; then
+          readarray -t FAILED_SCENARIOS < <(
+            jq -r '
+              .[]?.elements[]? 
+              | select(.steps[].result.status == "failed") 
+              | {
+                  name: .name,
+                  errors: (
+                    [ .steps[] | select(.result.status == "failed") | .result.error_message // "Erro não especificado" ]
+                    | join("\n---\n")
+                  )
+                } 
+              | "\(.name)||\(.errors)"
+            ' test-results/cucumber-report.json
+          )
+        
+          if [ ${#FAILED_SCENARIOS[@]} -eq 0 ]; then
             echo "✅ Nenhum cenário com falha encontrado."
             exit 0
           fi
         
-          for ENTRY in "${FAILED_ENTRIES[@]}"; do
-            SCENARIO_NAME=$(echo "$ENTRY" | cut -d "|" -f1 | xargs)
-            ERROR_MSG=$(echo "$ENTRY" | cut -d "|" -f2- | xargs)
+          for ENTRY in "${FAILED_SCENARIOS[@]}"; do
+            SCENARIO_NAME=$(echo "$ENTRY" | cut -d "||" -f1 | xargs)
+            ERROR_MSG=$(echo "$ENTRY" | cut -d "||" -f2- | xargs)
         
             echo "🐞 Criando bug para o cenário: $SCENARIO_NAME"
         
-            DESCRIPTION="Falha no cenário: \"$SCENARIO_NAME\"\n\n❌ Erro:\n$ERROR_MSG\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            DESCRIPTION="Falha no cenário: \"$SCENARIO_NAME\"\n\n❌ Erros encontrados:\n$ERROR_MSG\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         
             curl -s -X POST "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
               -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
@@ -128,7 +132,7 @@ jobs:
                   tags: ["automated", "ci", "bug"],
                   due_date_time: false
                 }')"
-          done  
+          done        
 
   deploy-report:
     needs: test
