@@ -85,24 +85,22 @@ jobs:
             exit 1
           fi
 
-      - name: Criar um bug no ClickUp para cada cenário com falha (com todos os erros)
+      - name: Criar um bug no ClickUp para cada cenário Cucumber com falha
         if: failure()
         run: |
-          echo "🔍 Extraindo cenários com falha e agregando erros..."
+          echo "📦 Lendo cenários com falha e criando bugs..."
         
+          # Extraímos o nome do cenário e o primeiro erro (apenas um por cenário)
           readarray -t FAILED_SCENARIOS < <(
             jq -r '
               .[]?.elements[]? 
-              | select(.steps[].result.status == "failed") 
+              | select(.steps[].result.status == "failed")
               | {
                   name: .name,
-                  errors: (
-                    [ .steps[] | select(.result.status == "failed") | .result.error_message // "Erro não especificado" ]
-                    | join("\n---\n")
-                  )
-                } 
-              | "\(.name)||\(.errors)"
-            ' test-results/cucumber-report.json
+                  error: (.steps[] | select(.result.status == "failed") | .result.error_message // "Erro não especificado") 
+                }
+              | "\(.name)||\(.error)"
+            ' test-results/cucumber-report.json | sort -u
           )
         
           if [ ${#FAILED_SCENARIOS[@]} -eq 0 ]; then
@@ -114,15 +112,15 @@ jobs:
             SCENARIO_NAME=$(echo "$ENTRY" | cut -d "||" -f1 | xargs)
             ERROR_MSG=$(echo "$ENTRY" | cut -d "||" -f2- | xargs)
         
-            echo "🐞 Criando bug para o cenário: $SCENARIO_NAME"
+            echo "🐞 Criando bug: $SCENARIO_NAME"
         
-            DESCRIPTION="Falha no cenário: \"$SCENARIO_NAME\"\n\n❌ Erros encontrados:\n$ERROR_MSG\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            DESCRIPTION="Falha detectada no cenário automatizado:\n\n\"$SCENARIO_NAME\"\n\n🧨 Erro:\n$ERROR_MSG\n\n🔗 [Ver execução do workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
         
             curl -s -X POST "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
               -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d "$(jq -n \
-                --arg name "🐞 Bug automático: $SCENARIO_NAME" \
+                --arg name "🐞 $SCENARIO_NAME" \
                 --arg description "$DESCRIPTION" \
                 '{
                   name: $name,
@@ -132,7 +130,7 @@ jobs:
                   tags: ["automated", "ci", "bug"],
                   due_date_time: false
                 }')"
-          done        
+          done             
 
   deploy-report:
     needs: test
