@@ -85,31 +85,40 @@ jobs:
             exit 1
           fi
 
-      - name: Criar um bug no ClickUp para cada cenário com falha
+      - name: Criar um bug no ClickUp para cada cenário com falha (com erro)
         if: failure()
         run: |
-          echo "🔍 Buscando cenários com falha no relatório JSON..."
+          echo "🔍 Extraindo cenários com falha e mensagens de erro..."
         
-          # Lê os nomes dos cenários com falha e armazena cada linha como um item de array
-          readarray -t FAILED_SCENARIOS < <(jq -r '.[]?.elements[]? | select(.steps[].result.status=="failed") | .name' test-results/cucumber-report.json | uniq)
-        
-          if [ ${#FAILED_SCENARIOS[@]} -eq 0 ]; then
+          # Extrai nome do cenário e erro (se houver), um por linha, separado por "|"
+          readarray -t FAILED_ENTRIES < <(jq -r '
+            .[]?.elements[]? 
+            | select(.steps[].result.status == "failed") 
+            | {
+                name: .name, 
+                error: (.steps[] | select(.result.status == "failed") | .result.error_message // "Erro não especificado")
+              } 
+            | "\(.name) | \(.error)"
+          ' test-results/cucumber-report.json)
+      
+          if [ ${#FAILED_ENTRIES[@]} -eq 0 ]; then
             echo "✅ Nenhum cenário com falha encontrado."
             exit 0
           fi
         
-          for SCENARIO in "${FAILED_SCENARIOS[@]}"; do
-            echo "🐞 Criando bug para o cenário: $SCENARIO"
+          for ENTRY in "${FAILED_ENTRIES[@]}"; do
+            SCENARIO_NAME=$(echo "$ENTRY" | cut -d "|" -f1 | xargs)
+            ERROR_MSG=$(echo "$ENTRY" | cut -d "|" -f2- | xargs)
         
-            # Monta a descrição com o link pro workflow
-            DESCRIPTION="Falha no cenário automatizado: \"$SCENARIO\"\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "🐞 Criando bug para o cenário: $SCENARIO_NAME"
         
-            # Faz a chamada para a API do ClickUp
+            DESCRIPTION="Falha no cenário: \"$SCENARIO_NAME\"\n\n❌ Erro:\n$ERROR_MSG\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        
             curl -s -X POST "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
               -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d "$(jq -n \
-                --arg name "🐞 Bug automático: $SCENARIO" \
+                --arg name "🐞 Bug automático: $SCENARIO_NAME" \
                 --arg description "$DESCRIPTION" \
                 '{
                   name: $name,
@@ -119,7 +128,7 @@ jobs:
                   tags: ["automated", "ci", "bug"],
                   due_date_time: false
                 }')"
-          done     
+          done  
 
   deploy-report:
     needs: test
