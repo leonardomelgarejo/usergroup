@@ -98,25 +98,37 @@ jobs:
           fi
         
           for SCENARIO in "${FAILED_SCENARIOS[@]}"; do
+            echo "🔍 Verificando se o bug já existe para o cenário: $SCENARIO"
+
+            # Busca tarefas existentes com o mesmo nome
+            EXISTING_TASK=$(curl -s -X GET "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task?search=${SCENARIO}" \
+            -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
+            -H "Content-Type: application/json")
+
+            if echo "$EXISTING_TASK" | jq -e ".tasks[] | select(.name | test(\"$SCENARIO\"))" > /dev/null; then
+            echo "⚠️ Bug já existe para o cenário: $SCENARIO – pulando criação."
+            continue
+            fi
+
             echo "🐞 Criando bug para o cenário: $SCENARIO"
-        
+
             DESCRIPTION=$(printf "Falha no cenário automatizado: \"%s\"\n\n🔗 Workflow: %s/%s/actions/runs/%s" \
-              "$SCENARIO" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}")
-        
+            "$SCENARIO" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}")
+
             curl -s -X POST "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
-              -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              -d "$(jq -n \
-                --arg name "🐞 Falha CI: $SCENARIO" \
-                --arg description "$DESCRIPTION" \
-                '{
-                  name: $name,
-                  description: $description,
-                  status: "to do",
-                  priority: 3,
-                  tags: ["automated", "ci", "bug"],
-                  due_date_time: false
-                }')"
+            -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+            --arg name "🐞 CI Fail: $SCENARIO" \
+            --arg description "$DESCRIPTION" \
+            '{
+            name: $name,
+            description: $description,
+            status: "to do",
+            priority: 3,
+            tags: ["automated", "ci", "bug"],
+            due_date_time: false
+            }')"
           done
 
   deploy-report:
