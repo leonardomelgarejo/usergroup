@@ -88,17 +88,36 @@ jobs:
       - name: Criar bug no ClickUp se os testes falharem
         if: failure()
         run: |
+          echo "Extraindo cenários com falha do cucumber-report.json..."
+        
+          # Extrai os nomes dos cenários com status "failed"
+          FAILED_SCENARIOS=$(jq -r '.[]?.elements[]? | select(.steps[].result.status=="failed") | .name' test-results/cucumber-report.json | uniq)
+        
+          if [ -z "$FAILED_SCENARIOS" ]; then
+            echo "Nenhum cenário com falha identificado no JSON."
+            exit 0
+          fi
+        
+          BUG_NAME="🐞 Cenários com falha: $(echo "$FAILED_SCENARIOS" | paste -sd ' | ' -)"
+        
+          DESCRIPTION="Falha nos testes automatizados:\n\nCenários:\n$FAILED_SCENARIOS\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        
+          echo "Criando bug no ClickUp com nome: $BUG_NAME"
+        
           curl -X POST "https://api.clickup.com/api/v2/list/${{ secrets.CLICKUP_LIST_ID }}/task" \
-          -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
-          -H "Content-Type: application/json" \
-          -d '{
-                "name": "🐞 Bug automático: Testes falharam no GitHub Actions",
-                "description": "Falha nos testes automatizados.\n\n🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-                "status": "to do",
-                "priority": 3,
-                "tags": ["automated", "ci", "bug"],
-                "due_date_time": false
-              }'
+            -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg name "$BUG_NAME" \
+              --arg description "$DESCRIPTION" \
+              '{
+                name: $name,
+                description: $description,
+                status: "to do",
+                priority: 3,
+                tags: ["automated", "ci", "bug"],
+                due_date_time: false
+              }')"        
 
       - name: Upload Cucumber Test Report
         uses: actions/upload-artifact@v4
