@@ -90,15 +90,15 @@ jobs:
         run: |
           echo "📦 Lendo cenários com falha e criando bugs..."
         
-          # Extraímos o nome do cenário e o primeiro erro (apenas um por cenário)
+          # Garante que cada cenário com falha gera apenas UM bug, com nome e erro
           readarray -t FAILED_SCENARIOS < <(
             jq -r '
               .[]?.elements[]? 
-              | select(.steps[].result.status == "failed")
+              | select(.steps[].result.status == "failed") 
               | {
-                  name: .name,
-                  error: (.steps[] | select(.result.status == "failed") | .result.error_message // "Erro não especificado") 
-                }
+                  name: (.name // "Cenário sem nome"),
+                  error: (.steps[] | select(.result.status == "failed") | .result.error_message // "Erro não especificado")
+                } 
               | "\(.name)||\(.error)"
             ' test-results/cucumber-report.json | sort -u
           )
@@ -112,7 +112,7 @@ jobs:
             SCENARIO_NAME=$(echo "$ENTRY" | cut -d "||" -f1 | xargs)
             ERROR_MSG=$(echo "$ENTRY" | cut -d "||" -f2- | xargs)
         
-            echo "🐞 Criando bug: $SCENARIO_NAME"
+            echo "🐞 Criando bug para cenário: $SCENARIO_NAME"
         
             DESCRIPTION="Falha detectada no cenário automatizado:\n\n\"$SCENARIO_NAME\"\n\n🧨 Erro:\n$ERROR_MSG\n\n🔗 [Ver execução do workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
         
@@ -130,7 +130,7 @@ jobs:
                   tags: ["automated", "ci", "bug"],
                   due_date_time: false
                 }')"
-          done             
+          done                 
 
   deploy-report:
     needs: test
