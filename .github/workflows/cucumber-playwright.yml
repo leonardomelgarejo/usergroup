@@ -124,7 +124,7 @@ jobs:
               -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d "$(jq -n \
-                --arg name "🐞 Bug automático: $SCENARIO" \
+                --arg name "🐞 CI Fail : $SCENARIO" \
                 --arg description "$DESCRIPTION" \
                 '{
                   name: $name,
