@@ -115,14 +115,15 @@ jobs:
         
               echo "🐞 Criando bug para o cenário: $SCENARIO"
         
-              # Extrai os passos do cenário com falha
+              # Extrai os passos do cenário com falha, incluindo mensagens de erro quando existirem
               STEPS=$(jq -r --arg scenario "$SCENARIO" '
                 .[]?.elements[]? 
                 | select(.name == $scenario) 
                 | .steps[] 
-                | "- " + .keyword + .name + " (" + .result.status + ")"' test-results/cucumber-report.json)
+                | "- " + .keyword + .name + " (" + .result.status + ")" 
+                  + (if .result.error_message then "\n  💥 " + (.result.error_message | gsub("\n"; " ") | gsub("\r"; "")) else "" end)' test-results/cucumber-report.json)
         
-              # Monta a descrição com o nome, steps e link para o workflow
+              # Monta a descrição com nome, steps e link para o workflow
               DESCRIPTION=$(printf "Falha no cenário automatizado: \"%s\"\n\n🔗 Workflow: %s/%s/actions/runs/%s\n\n📋 Passos:\n%s" \
                 "$SCENARIO" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}" "$STEPS")
         
@@ -139,8 +140,7 @@ jobs:
                     status: "to do",
                     priority: 3,
                   }')"
-            done
-        
+            done        
 
       - name: Upload Cucumber Test Report
         uses: actions/upload-artifact@v4
