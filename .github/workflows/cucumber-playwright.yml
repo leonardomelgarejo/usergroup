@@ -107,10 +107,16 @@ jobs:
                 -H "Authorization: ${{ secrets.CLICKUP_API_TOKEN }}" \
                 -H "Content-Type: application/json")
         
-              # Se já houver tarefa com esse nome, pula
-              if echo "$EXISTING_TASKS" | jq -e --arg scenario "$SCENARIO" '.tasks[] | select(.name | test($scenario))' > /dev/null; then
-                echo "⚠️ Bug já existe para o cenário: $SCENARIO – pulando criação."
-                continue
+              # Se já houver tarefa com esse nome e status "functional review" ou "closed", pula
+              if echo "$EXISTING_TASKS" | jq -e --arg scenario "$SCENARIO" '
+              .tasks[] 
+              | select(
+              (.name | test($scenario)) and 
+              (.status.status | ascii_downcase == "functional review" or .status.status | ascii_downcase == "closed")
+              )
+              ' > /dev/null; then
+              echo "⚠️ Bug já existe para o cenário (em revisão funcional ou fechado): $SCENARIO – pulando criação."
+              continue
               fi
         
               echo "🐞 Criando bug para o cenário: $SCENARIO"
