@@ -131,8 +131,6 @@ jobs:
                   description: $description,
                   status: "to do",
                   priority: 3,
-                  tags: ["automated", "ci", "bug"],
-                  due_date_time: false
                 }')"
           done
 
